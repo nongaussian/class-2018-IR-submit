@@ -5,7 +5,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 
-import com.sun.javaws.IconUtil;
+//import com.sun.javaws.IconUtil;
 import org.apache.commons.lang3.tuple.MutableTriple;
 import edu.hanyang.indexer.ExternalSort;
 
@@ -31,7 +31,7 @@ class TripleSort implements Comparator<MutableTriple> {
 public class TinySEExternalSort implements ExternalSort {
 	public void sort(String infile, String outfile, String tmpdir, int blocksize, int nblocks) throws IOException {
 		/* nblocks = M */
-
+		
 		File dir = new File(tmpdir);
 		if (!dir.exists()) {
 			dir.mkdirs();
@@ -68,6 +68,7 @@ public class TinySEExternalSort implements ExternalSort {
 
 				dout.close();
 			}
+			
 			/* Rest Run*/
 			if(rest_nElement !=0) {
 				for (int i = 0; i < rest_nElement; i++) {
@@ -93,7 +94,7 @@ public class TinySEExternalSort implements ExternalSort {
 
 	public static void main(String[] args) throws IOException {
 		String now_path = System.getProperty("user.dir");
-//
+		
 		String infile = now_path + "/src/test/resources/test.data";
 		String outfile = "/tmp/res.data";
 		String tmpdir = now_path + "/tmp";
@@ -106,41 +107,17 @@ public class TinySEExternalSort implements ExternalSort {
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
+		System.out.println("fin");
 
+		DataInputStream dis = new DataInputStream(new BufferedInputStream(new FileInputStream(now_path + "/tmp/run0.data")));
 
-
-		DataInputStream dis = new DataInputStream(new BufferedInputStream(new FileInputStream("/Users/tw/Desktop/TinySE-submit/tmp/run1.data")));
-		int cnt = 0;
-		while(dis.available()>0){
+		while(dis.available() > 0){
 			int a= dis.readInt();
 			int b= dis.readInt();
 			int c= dis.readInt();
-			System.out.println(a+" "+b+" "+c + "     "+cnt);
-			cnt++;
+			System.out.println(a+" "+b+" "+c);
 		}
+		dis.close();
 	}
 
 }
-
-
-//		System.out.println(dis.available());
-//		System.out.println(nElement * nblocks);
-//
-//		System.out.println(dis.available() / (nblocks * nElement));
-//		System.out.println(dis.available() % (nblocks * nElement));
-
-
-//		// TripleSort test
-//		runs.add(new Triple(5, 4, 1));
-//		runs.add(new Triple(1, 1, 1));
-//		runs.add(new Triple(2, 4, 1));
-//		runs.add(new Triple(5, 2, 1));
-//		runs.add(new Triple(5, 4, 3));
-//		runs.add(new Triple(1, 5, 3));
-//		runs.add(new Triple(2, 2, 1));
-
-//		runs.sort(new TripleSort());
-//
-//		for (Triple t : runs) {
-//			System.out.printf("%d %d %d\n",t.word_id, t.doc_id, t.position);
-//		}
