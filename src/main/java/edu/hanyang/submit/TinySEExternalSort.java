@@ -29,11 +29,11 @@ class TripleSort implements Comparator<MutableTriple> {
 
 public class TinySEExternalSort implements ExternalSort {
 	public void sort(String infile, String outfile, String tmpdir, int blocksize, int nblocks) throws IOException {
-		/* 
+		/*
 		 * blocksize * nblocks = available memory size
-		 * nblocks = M 
+		 * nblocks = M
 		 * */
-		
+
 		File dir = new File(tmpdir);
 		if (!dir.exists()) {
 			dir.mkdirs();
@@ -76,7 +76,7 @@ public class TinySEExternalSort implements ExternalSort {
 				run_num++;
 				dout.close();
 			}
-			
+
 			/* Rest Run */
 			System.out.println("Rest : "+rest_nElement);
 			if(rest_nElement != 0) {
@@ -85,7 +85,7 @@ public class TinySEExternalSort implements ExternalSort {
 				}
 
 				runs.sort(new TripleSort());
-				dout = new DataOutputStream(new BufferedOutputStream(new FileOutputStream(tmpdir + File.separator + "run_0_" + run_num + ".data")));
+				dout = new DataOutputStream(new BufferedOutputStream(new FileOutputStream(tmpdir + File.separator + "run_0_" + run_num + ".data"),blocksize));
 				for (MutableTriple<Integer,Integer,Integer> t : runs) {
 					dout.writeInt(t.getLeft());
 					dout.writeInt(t.getMiddle());
@@ -96,69 +96,121 @@ public class TinySEExternalSort implements ExternalSort {
 				run_num++;
 			}
 			dis.close();
-			
+
 			System.out.println(run_num + " : runs are init!");
-			
-			
+
+
 			/* TODO : Start M-1 way Merge */
-			int prevStepIdx = 0; 
+			int prevStepIdx = 0;
 			while (true) {
 				/* Last Step */
 				if (run_num < nblocks) {
 					ArrayList<DataInputStream> fileList = new ArrayList<>();
-					
+
+					System.out.println("### Final Merge ###");
+
 					for (int i = 0; i < run_num; i++) {
-						DataInputStream run = new DataInputStream(new BufferedInputStream(new FileInputStream(tmpdir + File.separator + "run_" + prevStepIdx + "_" + i + ".data")));
+						DataInputStream run = new DataInputStream(new BufferedInputStream(new FileInputStream(tmpdir + File.separator + "run_" + prevStepIdx + "_" + i + ".data"), blocksize));
+						System.out.println(File.separator + "run_" + prevStepIdx + "_" + i + ".data");
 						fileList.add(run);
 					}
-					
+
 					_mergeSort(fileList, prevStepIdx + 1, outfile);
-					
+
+					System.out.println("##################");
+
 					break;
 				} else {
-					int tot_iter = run_num % (nblocks - 1) == 0 ? run_num / (nblocks - 1) : (run_num % (nblocks - 1)) + 1;
-					System.out.println("tot_iter : " + tot_iter);
+					int tot_iter = 1;
+					int tmp_run = run_num;
+					while (tmp_run > nblocks) {
+						tmp_run = run_num % (nblocks - 1) == 0 ? run_num / (nblocks - 1) : (run_num / (nblocks - 1)) + 1;
+						tot_iter++;
+					}
+					System.out.println("nblocks: " + nblocks);
+					System.out.println("run#,TOT_ITER: "+run_num+" "+tot_iter);
+					ArrayList<DataInputStream> fileList = new ArrayList<>();
 
-					for (int iter_idx = 0; iter_idx < tot_iter; iter_idx++) {
-						for (int i = 0; i < nblocks - 1; i++) {
+					for (int kIter = 1; kIter < tot_iter; kIter++) {
+						/* Full */
+						int full_cnt = run_num / nblocks;
+						System.out.println("Full_cnt: "+full_cnt);
+						for (int j = 0; j < full_cnt; j++) {
+							System.out.println("### MERGE ###");
 
+							for (int i = 0; i < nblocks; i++) {
+								DataInputStream run = new DataInputStream(new BufferedInputStream(new FileInputStream(tmpdir + File.separator + "run_" + (kIter - 1) + "_" + (j*nblocks + i) + ".data")));
+								System.out.println(File.separator + "run_" + (kIter - 1) + "_" + (j*nblocks + i) + ".data");
+								fileList.add(run);
+							}
+//							System.out.println("KIter : "+kIter);
+
+
+							System.out.println("### ### ###");
+							_mergeSort(fileList, kIter, tmpdir + File.separator + "run_" + kIter + "_" + j + ".data");
+
+//							System.out.println(kIter+"END");
+
+							fileList.clear();
 						}
 
+						/* Rest */
+						if (run_num % nblocks > 0) {
+							System.out.println("### MERGE ###");
+							for (int i = 0; i < run_num % nblocks; i++) {
+								DataInputStream run = new DataInputStream(new BufferedInputStream(new FileInputStream(tmpdir + File.separator + "run_" + (kIter - 1) + "_" + (full_cnt*nblocks + i) + ".data")));
+								System.out.println(File.separator + "run_" + (kIter - 1) + "_" + (full_cnt*nblocks + i) + ".data");
+								fileList.add(run);
+							}
+							System.out.println("### ### ###");
+							_mergeSort(fileList, kIter, tmpdir + File.separator + "run_" + kIter + "_" + full_cnt + ".data");
+
+							fileList.clear();
+						}
+
+						run_num = run_num % (nblocks-1) == 0 ? run_num / (nblocks-1) : (run_num / (nblocks-1)) + 1;
+						if (run_num < nblocks){
+							prevStepIdx = tot_iter - 1;
+							continue;
+						}
+
+						System.out.println("RUN#: "+run_num);
 					}
-					
+
+					fileList.clear();
 				}
 			}
-						
+
 			System.out.println("Fin!");
 		} catch (EOFException | FileNotFoundException e) {
 			e.printStackTrace();
 		}
 	}
-	
+
 	private void _mergeSort(ArrayList<DataInputStream> fileArr, int nowStepIdx, String outfile) throws IOException {
-		
-		PriorityQueue<DataManager> pq = new PriorityQueue<DataManager>(new DataCmp());
-		
+
+		PriorityQueue<DataManager> pq = new PriorityQueue<>(new DataCmp());
+
 		/* init PQ */
 		for (DataInputStream f : fileArr) {
 			try {
 				DataManager dm = new DataManager(f.readInt(), f.readInt(), f.readInt(), fileArr.indexOf(f));
-				pq.add(dm);				
+				pq.add(dm);
 			} catch (Exception e) {
 				e.printStackTrace();
 			}
 		}
-		
+
 		/* Now Only Consider Final Step*/
 		DataOutputStream dout = new DataOutputStream(new BufferedOutputStream(new FileOutputStream(outfile)));
-		
-		
+
+
 		/* Write Next Step File */
 		while (!pq.isEmpty()) {
 			try {
 				DataManager dm = pq.poll();
 //				System.out.println(dm.getTuple().getLeft()+ " " + dm.getTuple().getMiddle());
-				
+
 				dout.writeInt(dm.tuple.getLeft());
 				dout.writeInt(dm.tuple.getMiddle());
 				dout.writeInt(dm.tuple.getRight());
@@ -172,21 +224,21 @@ public class TinySEExternalSort implements ExternalSort {
 				e.printStackTrace();
 			}
 		}
-		
+
 		dout.close();
 	}
-	
+
 	private static class DataManager {
 		public MutableTriple<Integer, Integer, Integer> tuple = new MutableTriple<Integer, Integer, Integer>();
 		int index = -1;
-		
+
 		public DataManager(int left, int middle, int right, int idx){
 			this.tuple.setLeft(left);
 			this.tuple.setMiddle(middle);
 			this.tuple.setRight(right);
 			this.index = idx;
 		}
-		
+
 		public void setTuple(int left, int middle, int right) {
 			this.tuple.setLeft(left);
 			this.tuple.setMiddle(middle);
@@ -198,7 +250,7 @@ public class TinySEExternalSort implements ExternalSort {
 		}
 
 	}
-	
+
 	private class DataCmp implements Comparator<DataManager>{
 		@Override
 		public int compare(DataManager o1, DataManager o2) {
@@ -239,8 +291,8 @@ public class TinySEExternalSort implements ExternalSort {
 
 
 
-//		DataInputStream dis = new DataInputStream(new BufferedInputStream(new FileInputStream("./tmp/sorted.data")));
-		DataInputStream dis = new DataInputStream(new BufferedInputStream(new FileInputStream("./tmp/run_0_73.data")));
+		DataInputStream dis = new DataInputStream(new BufferedInputStream(new FileInputStream("./tmp/sorted.data")));
+//		DataInputStream dis = new DataInputStream(new BufferedInputStream(new FileInputStream("./tmp/run_0_73.data")));
 
 		int cnt = 0;
 		while(dis.available() > 0){
