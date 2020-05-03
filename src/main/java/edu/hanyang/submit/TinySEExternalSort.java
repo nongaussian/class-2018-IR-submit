@@ -4,10 +4,15 @@ import java.io.*;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.PriorityQueue;
+
+import javax.swing.tree.MutableTreeNode;
 
 //import com.sun.javaws.IconUtil;
 import org.apache.commons.lang3.tuple.MutableTriple;
 import edu.hanyang.indexer.ExternalSort;
+import edu.hanyang.utils.DiskIO;
+import jdk.nashorn.internal.objects.annotations.Getter;
 
 class TripleSort implements Comparator<MutableTriple> {
 	@Override
@@ -30,7 +35,10 @@ class TripleSort implements Comparator<MutableTriple> {
 
 public class TinySEExternalSort implements ExternalSort {
 	public void sort(String infile, String outfile, String tmpdir, int blocksize, int nblocks) throws IOException {
-		/* nblocks = M */
+		/* 
+		 * blocksize * nblocks = available memory size
+		 * nblocks = M 
+		 * */
 		
 		File dir = new File(tmpdir);
 		if (!dir.exists()) {
@@ -56,8 +64,8 @@ public class TinySEExternalSort implements ExternalSort {
 				}
 				runs.sort(new TripleSort());
 
-				// runs to file
-				dout = new DataOutputStream(new BufferedOutputStream(new FileOutputStream(tmpdir + "/run" + run_num + ".data")));
+				/* init runs to file */
+				dout = new DataOutputStream(new BufferedOutputStream(new FileOutputStream(tmpdir + File.separator + "run_0_" + run_num + ".data")));
 				for (MutableTriple<Integer,Integer,Integer> t : runs) {
 					dout.writeInt(t.getLeft());
 					dout.writeInt(t.getMiddle());
@@ -69,14 +77,14 @@ public class TinySEExternalSort implements ExternalSort {
 				dout.close();
 			}
 			
-			/* Rest Run*/
-			if(rest_nElement !=0) {
+			/* Rest Run */
+			if(rest_nElement != 0) {
 				for (int i = 0; i < rest_nElement; i++) {
 					runs.add(new MutableTriple<>(dis.readInt(),dis.readInt(),dis.readInt()));
 				}
 
 				runs.sort(new TripleSort());
-				dout = new DataOutputStream(new BufferedOutputStream(new FileOutputStream(tmpdir + "/run" + run_num + ".data")));
+				dout = new DataOutputStream(new BufferedOutputStream(new FileOutputStream(tmpdir + File.separator + "run_0_" + run_num + ".data")));
 				for (MutableTriple<Integer,Integer,Integer> t : runs) {
 					dout.writeInt(t.getLeft());
 					dout.writeInt(t.getMiddle());
@@ -86,12 +94,112 @@ public class TinySEExternalSort implements ExternalSort {
 				dout.close();
 			}
 			dis.close();
-
-		} catch (EOFException | FileNotFoundException eof) {
-			eof.printStackTrace();
+			
+			System.out.println(run_num + " : runs are init!");
+			
+			
+			/* TODO : Start M-1 way Merge */
+			int prevStepIdx = 0; 
+			while (true) {
+				/* Last Step */
+				if (run_num < nblocks) {
+					ArrayList<DataInputStream> fileList = new ArrayList<DataInputStream>();
+					
+					for (int i = 0; i < run_num; i++) {
+						DataInputStream run = new DataInputStream(new BufferedInputStream(new FileInputStream(tmpdir + File.separator + "run_" + prevStepIdx + "_" + i + ".data")));
+						fileList.add(run);
+					}
+					
+					_mergeSort(fileList, prevStepIdx + 1, outfile);
+					
+					break;
+				} else {
+//					int tot_iter = run_num % (nblocks - 1) == 0 ? run_num / (nblocks - 1) : (run_num % (nblocks - 1)) + 1;
+//					System.out.println("tot_iter : " + tot_iter);
+//									
+//					for (int iter_idx = 0; iter_idx < tot_iter; iter_idx++) {
+//						for (int i = 0; i < nblocks - 1; i++) {
+//
+//						}
+//
+//					}
+					
+				}
+			}
+						
+			System.out.println("Fin!");
+		} catch (EOFException | FileNotFoundException e) {
+			e.printStackTrace();
 		}
 	}
+	
+	private void _mergeSort(ArrayList<DataInputStream> fileArr, int nowStepIdx, String outfile) throws IOException {
+		
+		PriorityQueue<DataManager> pq = new PriorityQueue<DataManager>(new DataCmp());
+		
+		/* init PQ */
+		for (DataInputStream f : fileArr) {
+			try {
+				DataManager dm = new DataManager(f.readInt(), f.readInt(), f.readInt(), fileArr.indexOf(f));
+				pq.add(dm);				
+			} catch (Exception e) {
+				e.printStackTrace();
+			}
+		}
+		
+		/* Now Only Consider Final Step*/
+		DataOutputStream dout = new DataOutputStream(new BufferedOutputStream(new FileOutputStream(outfile)));
+		
+		
+		/* Write Next Step File */
+		while (!pq.isEmpty()) {
+			try {
+				DataManager dm = pq.poll();
+				
+				dout.writeInt(dm.tuple.getLeft());
+				dout.writeInt(dm.tuple.getMiddle());
+				dout.writeInt(dm.tuple.getRight());
+				dout.flush();
+				
+				dm.setTuple(fileArr.get(dm.index).readInt(), fileArr.get(dm.index).readInt(), fileArr.get(dm.index).readInt());
+				
+				pq.add(dm);
+				
+			} catch (Exception e) {
+				e.printStackTrace();
+			}
+		}
+		
+		dout.close();
+	}
+	
+	private class DataManager {
+		public MutableTriple<Integer, Integer, Integer> tuple = new MutableTriple<Integer, Integer, Integer>();
+		int index = -1;
+		
+		public DataManager(int left, int middle, int right, int idx){
+			this.tuple.setLeft(left);
+			this.tuple.setMiddle(middle);
+			this.tuple.setRight(right);
+			this.index = idx;
+		}
+		
+		public void setTuple(int left, int middle, int right) {
+			this.tuple.setLeft(left);
+			this.tuple.setMiddle(middle);
+			this.tuple.setRight(right);
+		}
 
+	}
+	
+	private class DataCmp implements Comparator<DataManager>{
+		@Override
+		public int compare(DataManager o1, DataManager o2) {
+			return o1.tuple.compareTo(o2.tuple);
+		}
+		
+	}
+	
 	public static void main(String[] args) throws IOException {
 		String now_path = System.getProperty("user.dir");
 		
@@ -107,17 +215,19 @@ public class TinySEExternalSort implements ExternalSort {
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
-		System.out.println("fin");
-
-		DataInputStream dis = new DataInputStream(new BufferedInputStream(new FileInputStream(now_path + "/tmp/run0.data")));
-
-		while(dis.available() > 0){
-			int a= dis.readInt();
-			int b= dis.readInt();
-			int c= dis.readInt();
-			System.out.println(a+" "+b+" "+c);
-		}
-		dis.close();
+		
+		/* run data check test */
+//		DataInputStream dis = new DataInputStream(new BufferedInputStream(new FileInputStream(now_path + "/tmp/run0.data")));
+//
+//		while(dis.available() > 0){
+//			int a= dis.readInt();
+//			int b= dis.readInt();
+//			int c= dis.readInt();
+//			System.out.println(a+" "+b+" "+c);
+//		}
+//		dis.close();
+		
+		
 	}
 
 }
