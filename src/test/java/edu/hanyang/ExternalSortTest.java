@@ -14,7 +14,7 @@ import org.junit.Test;
 
 import edu.hanyang.submit.TinySEExternalSort;
 
-@Ignore("Delete this line to unit test stage 2")
+//@Ignore("Delete this line to unit test stage 2")
 public class ExternalSortTest {
 	@Before
 	public void init() {
